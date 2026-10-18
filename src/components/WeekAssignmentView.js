@@ -9,8 +9,7 @@ import { playSound } from '../utils/sound.js';
 export function renderWeekAssignmentView(container, weekNum, initialMode = 'study', onNavigate) {
   const weekInfo = weeksMeta.find(w => w.week === weekNum) || {
     week: weekNum,
-    title: `Week ${weekNum} Assignment`,
-    dueDate: '2026-08-05, 23:59 IST'
+    title: `Week ${weekNum} Assignment`
   };
 
   const questions = getQuestionsForWeek(weekNum);
@@ -24,6 +23,7 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
   Object.entries(savedAnswers).forEach(([qId, data]) => {
     userAnswers[qId] = data.answer;
   });
+  let pendingSelections = {};
 
   function render() {
     container.innerHTML = `
@@ -34,7 +34,6 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
             <a href="#" class="breadcrumb-link" id="breadcrumb-home">Dashboard</a>
             <span>/</span>
             <span style="color:#fff; font-weight:700;">Week ${weekNum}: ${weekInfo.title}</span>
-            <span class="badge badge-subtle" style="margin-left:0.5rem;">Due: ${weekInfo.dueDate}</span>
           </div>
 
           <div class="practice-controls-group">
@@ -97,6 +96,7 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
     container.querySelector('#btn-clear-week').onclick = () => {
       if (confirm('Clear all answers recorded for Week ' + weekNum + '?')) {
         userAnswers = {};
+        pendingSelections = {};
         store.clearWeekProgress(weekNum);
         isSubmitted = false;
         renderQuestionAndPalette();
@@ -113,6 +113,7 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
 
     const currentQ = questions[currentIndex];
     const currentAns = userAnswers[currentQ.id];
+    const currentPending = pendingSelections[currentQ.id] || null;
     const isBookmarked = store.isBookmarked(currentQ.id);
 
     // 1. Render Question Card
@@ -121,14 +122,25 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
       questionIndex: currentIndex,
       totalQuestions: questions.length,
       userAnswer: currentAns,
+      pendingAnswer: currentPending,
+      onPendingChange: (newPending) => {
+        pendingSelections[currentQ.id] = newPending;
+      },
       onAnswerChange: (newAns) => {
         if (newAns === null) {
           delete userAnswers[currentQ.id];
         } else {
+          delete pendingSelections[currentQ.id];
           userAnswers[currentQ.id] = newAns;
           const res = checkAnswer(currentQ, newAns);
           store.saveWeekAnswer(weekNum, currentQ.id, newAns, res.isCorrect, res.score);
         }
+        renderQuestionAndPalette();
+      },
+      onReattempt: () => {
+        const prevAns = userAnswers[currentQ.id];
+        pendingSelections[currentQ.id] = Array.isArray(prevAns) ? [...prevAns] : (prevAns ? [prevAns] : []);
+        delete userAnswers[currentQ.id];
         renderQuestionAndPalette();
       },
       mode,
@@ -179,10 +191,9 @@ export function renderWeekAssignmentView(container, weekNum, initialMode = 'stud
     };
 
     navBar.querySelector('#btn-clear-answer').onclick = () => {
-      if (userAnswers[currentQ.id]) {
-        delete userAnswers[currentQ.id];
-        renderQuestionAndPalette();
-      }
+      delete userAnswers[currentQ.id];
+      delete pendingSelections[currentQ.id];
+      renderQuestionAndPalette();
     };
 
     questionCol.innerHTML = '';

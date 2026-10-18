@@ -6,7 +6,10 @@ export function renderQuestionCard({
   questionIndex,
   totalQuestions,
   userAnswer,
+  pendingAnswer = null,
   onAnswerChange,
+  onPendingChange,
+  onReattempt,
   mode = 'study',
   isSubmitted = false,
   isBookmarked = false,
@@ -17,9 +20,14 @@ export function renderQuestionCard({
 
   const isMultiple = question.type === 'multiple_choice';
   const isNumerical = question.type === 'numerical';
-  const showFeedback = mode === 'study' ? Boolean(userAnswer) : isSubmitted;
   
-  const checkResult = showFeedback ? checkAnswer(question, userAnswer) : null;
+  const hasSubmittedAnswer = userAnswer !== null && userAnswer !== undefined && 
+    (Array.isArray(userAnswer) ? userAnswer.length > 0 : userAnswer !== '');
+
+  const showFeedback = mode === 'study' ? (isMultiple ? hasSubmittedAnswer : Boolean(userAnswer)) : isSubmitted;
+  
+  const evaluatedAnswer = isMultiple ? (userAnswer || null) : userAnswer;
+  const checkResult = showFeedback && evaluatedAnswer !== null ? checkAnswer(question, evaluatedAnswer) : null;
 
   // Render Einsum matrix if present
   let matrixHtml = '';
@@ -57,6 +65,8 @@ export function renderQuestionCard({
 
   // Render options or numeric input
   let optionsHtml = '';
+  let currentSelections = [];
+
   if (isNumerical) {
     const val = userAnswer || '';
     optionsHtml = `
@@ -68,21 +78,93 @@ export function renderQuestionCard({
           id="num-input-${question.id}" 
           placeholder="Enter numeric scalar..."
           value="${val}"
-          ${showFeedback && mode === 'study' ? '' : ''}
         />
         <button class="btn btn-primary btn-sm" id="btn-submit-num">
           <span>Apply</span>
         </button>
       </div>
     `;
+  } else if (isMultiple) {
+    if (hasSubmittedAnswer) {
+      currentSelections = Array.isArray(userAnswer) ? [...userAnswer] : [userAnswer];
+    } else {
+      currentSelections = Array.isArray(pendingAnswer) ? [...pendingAnswer] : [];
+    }
+
+    optionsHtml = `
+      <div class="mcq-badge-indicator">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Multiple Choice (Select all that apply${mode === 'study' ? ', then click Submit Answer' : ''})</span>
+      </div>
+
+      <div class="options-list">
+        ${question.options.map(opt => {
+          const isSelected = currentSelections.includes(opt.id);
+          const isCorrectChoice = (question.acceptedOptionIds || []).includes(opt.id);
+
+          let stateClass = '';
+          if (isSelected) stateClass += ' selected';
+
+          if (showFeedback) {
+            if (isCorrectChoice) {
+              stateClass += ' correct';
+            } else if (isSelected && !isCorrectChoice) {
+              stateClass += ' incorrect';
+            } else {
+              stateClass += ' dimmed';
+            }
+          }
+
+          const checkmarkSvg = (isSelected || (showFeedback && isCorrectChoice))
+            ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`
+            : '';
+
+          return `
+            <button 
+              type="button" 
+              class="option-btn ${stateClass}" 
+              data-opt-id="${opt.id}"
+            >
+              <span class="option-checkbox">${checkmarkSvg}</span>
+              <span class="option-letter">${opt.id}</span>
+              <span class="option-text">${opt.text}</span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      ${mode === 'study' ? `
+        <div class="mcq-submit-wrapper">
+          ${!showFeedback ? `
+            <button 
+              type="button" 
+              class="btn btn-primary" 
+              id="btn-submit-mcq" 
+              ${currentSelections.length === 0 ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Submit Answer</span>
+            </button>
+            <span class="mcq-selection-hint" id="mcq-hint-text">
+              ${currentSelections.length === 0 ? 'Select all applicable options, then click Submit' : `${currentSelections.length} option${currentSelections.length > 1 ? 's' : ''} selected`}
+            </span>
+          ` : `
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reattempt-mcq">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              <span>Re-attempt Question</span>
+            </button>
+          `}
+        </div>
+      ` : ''}
+    `;
   } else {
-    const currentSelections = Array.isArray(userAnswer) ? userAnswer : (userAnswer ? [userAnswer] : []);
+    // Single choice
+    const selectedOption = Array.isArray(userAnswer) ? userAnswer[0] : userAnswer;
 
     optionsHtml = `
       <div class="options-list">
-        ${isMultiple ? `<div style="font-size:0.75rem; color:var(--accent-cyan); font-weight:700; margin-bottom:0.25rem;">(Select all that apply)</div>` : ''}
         ${question.options.map(opt => {
-          const isSelected = currentSelections.includes(opt.id);
+          const isSelected = selectedOption === opt.id;
           const isCorrectChoice = (question.acceptedOptionIds || []).includes(opt.id);
 
           let stateClass = '';
@@ -181,40 +263,8 @@ export function renderQuestionCard({
     ${feedbackHtml}
   `;
 
-  // Option Click Handlers
-  if (!isNumerical) {
-    card.querySelectorAll('.option-btn').forEach(btn => {
-      btn.onclick = () => {
-        const optId = btn.dataset.optId;
-        let newAnswer;
-
-        if (isMultiple) {
-          const current = Array.isArray(userAnswer) ? [...userAnswer] : (userAnswer ? [userAnswer] : []);
-          const idx = current.indexOf(optId);
-          if (idx >= 0) {
-            current.splice(idx, 1);
-          } else {
-            current.push(optId);
-          }
-          newAnswer = current.length > 0 ? current : null;
-        } else {
-          newAnswer = optId;
-        }
-
-        // Play feedback sounds
-        if (mode === 'study' && newAnswer) {
-          const res = checkAnswer(question, newAnswer);
-          if (res.isCorrect) playSound('correct');
-          else playSound('incorrect');
-        } else {
-          playSound('click');
-        }
-
-        onAnswerChange(newAnswer);
-      };
-    });
-  } else {
-    // Numerical Input Handlers
+  // Attach Handlers
+  if (isNumerical) {
     const numInput = card.querySelector(`#num-input-${question.id}`);
     const submitBtn = card.querySelector('#btn-submit-num');
 
@@ -236,6 +286,124 @@ export function renderQuestionCard({
     numInput.onkeydown = (e) => {
       if (e.key === 'Enter') handleNumSubmit();
     };
+  } else if (isMultiple) {
+    if (mode === 'study') {
+      if (!showFeedback) {
+        // Unsubmitted state: allow toggling multiple answers without evaluating
+        card.querySelectorAll('.option-btn').forEach(btn => {
+          btn.onclick = () => {
+            const optId = btn.dataset.optId;
+            const idx = currentSelections.indexOf(optId);
+            if (idx >= 0) {
+              currentSelections.splice(idx, 1);
+            } else {
+              currentSelections.push(optId);
+            }
+
+            const isSel = currentSelections.includes(optId);
+            btn.classList.toggle('selected', isSel);
+            const cb = btn.querySelector('.option-checkbox');
+            if (cb) {
+              cb.innerHTML = isSel 
+                ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>` 
+                : '';
+            }
+
+            const submitBtn = card.querySelector('#btn-submit-mcq');
+            const hintEl = card.querySelector('#mcq-hint-text');
+            if (submitBtn) {
+              if (currentSelections.length > 0) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.style.cursor = 'pointer';
+              } else {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.5';
+                submitBtn.style.cursor = 'not-allowed';
+              }
+            }
+            if (hintEl) {
+              hintEl.textContent = currentSelections.length === 0 
+                ? 'Select all applicable options, then click Submit' 
+                : `${currentSelections.length} option${currentSelections.length > 1 ? 's' : ''} selected`;
+            }
+
+            playSound('click');
+            if (onPendingChange) {
+              onPendingChange([...currentSelections]);
+            }
+          };
+        });
+
+        const submitBtn = card.querySelector('#btn-submit-mcq');
+        if (submitBtn) {
+          submitBtn.onclick = () => {
+            if (currentSelections.length === 0) return;
+            const res = checkAnswer(question, currentSelections);
+            if (res.isCorrect) playSound('correct');
+            else playSound('incorrect');
+            onAnswerChange([...currentSelections]);
+          };
+        }
+      } else {
+        // Feedback is shown: handle re-attempt
+        const reattemptBtn = card.querySelector('#btn-reattempt-mcq');
+        const triggerReattempt = () => {
+          playSound('click');
+          if (onReattempt) {
+            onReattempt();
+          } else {
+            onAnswerChange(null);
+          }
+        };
+
+        if (reattemptBtn) {
+          reattemptBtn.onclick = triggerReattempt;
+        }
+
+        // Clicking any option button also unlocks the question for editing
+        card.querySelectorAll('.option-btn').forEach(btn => {
+          btn.onclick = triggerReattempt;
+        });
+      }
+    } else {
+      // Exam Mode: toggling saves answer silently without evaluating
+      card.querySelectorAll('.option-btn').forEach(btn => {
+        btn.onclick = () => {
+          const optId = btn.dataset.optId;
+          const idx = currentSelections.indexOf(optId);
+          if (idx >= 0) {
+            currentSelections.splice(idx, 1);
+          } else {
+            currentSelections.push(optId);
+          }
+          btn.classList.toggle('selected', currentSelections.includes(optId));
+          const cb = btn.querySelector('.option-checkbox');
+          if (cb) {
+            cb.innerHTML = currentSelections.includes(optId) 
+              ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>` 
+              : '';
+          }
+          playSound('click');
+          onAnswerChange(currentSelections.length > 0 ? [...currentSelections] : null);
+        };
+      });
+    }
+  } else {
+    // Single choice questions
+    card.querySelectorAll('.option-btn').forEach(btn => {
+      btn.onclick = () => {
+        const optId = btn.dataset.optId;
+        if (mode === 'study') {
+          const res = checkAnswer(question, optId);
+          if (res.isCorrect) playSound('correct');
+          else playSound('incorrect');
+        } else {
+          playSound('click');
+        }
+        onAnswerChange(optId);
+      };
+    });
   }
 
   // Bookmark Toggle

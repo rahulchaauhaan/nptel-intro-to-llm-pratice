@@ -283,6 +283,25 @@
   flex-shrink: 0;
 }
 
+/* MCQ Checkbox box styling */
+.option-checkbox {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .option-btn.selected {
   background: rgba(99, 102, 241, 0.15);
   border-color: #6366f1;
@@ -293,6 +312,12 @@
   background: #6366f1;
   color: #fff;
   border-color: #6366f1;
+}
+
+.option-btn.selected .option-checkbox {
+  background: #6366f1;
+  border-color: #6366f1;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
 
 /* Feedback states in Study Mode */
@@ -309,6 +334,12 @@
   font-weight: 800;
 }
 
+.option-btn.correct .option-checkbox {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+  color: #000 !important;
+}
+
 .option-btn.incorrect {
   background: rgba(244, 63, 94, 0.1) !important;
   border-color: #f43f5e !important;
@@ -322,8 +353,44 @@
   color: #fff !important;
 }
 
+.option-btn.incorrect .option-checkbox {
+  background: #f43f5e !important;
+  border-color: #f43f5e !important;
+  color: #fff !important;
+}
+
 .option-btn.dimmed {
   opacity: 0.45;
+}
+
+/* MCQ Controls & Indicators */
+.mcq-badge-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  margin-bottom: 0.85rem;
+}
+
+.mcq-submit-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mcq-selection-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* Numerical Answer Input Container */
